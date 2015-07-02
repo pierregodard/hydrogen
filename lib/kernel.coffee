@@ -15,6 +15,8 @@ class Kernel
         console.log "Kernel info:", @kernelInfo
         console.log "Kernel configuration:", @config
         console.log "Kernel configuration file path:", @configPath
+        @signatureScheme = "sha256"
+        @signatureKey = @config.key
         @language = @kernelInfo.language.toLowerCase()
         @executionCallbacks = {}
         @watchCallbacks = []
@@ -90,34 +92,31 @@ class Kernel
     # as results come in from the kernel
     _execute: (code, requestId, onResults) ->
         console.log "sending execute"
-        header = JSON.stringify({
-                msg_id: requestId,
-                username: "",
-                session: 0,
-                msg_type: "execute_request",
+        header =
+                msg_id: requestId
+                username: ""
+                session: 0
+                msg_type: "execute_request"
                 version: "5.0"
-            })
 
-        content = JSON.stringify({
+        content =
                 code: code
                 silent: false
                 store_history: true
                 user_expressions: {}
                 allow_stdin: false
-            })
 
-        message =  [
-                '<IDS|MSG>',
-                '',
-                header,
-                '{}',
-                '{}',
-                content
-            ]
-        console.log message
+        message = new jmp.Message()
+        message.fill(
+                header: header
+                content: content
+            )
+
+        signedMessage = message.sign(@signatureScheme, @signatureKey)
+        console.log signedMessage
 
         @executionCallbacks[requestId] = onResults
-        @shellSocket.send message
+        @shellSocket.send signedMessage
 
     execute: (code, onResults) ->
         requestId = "execute_" + uuid.v4()
@@ -132,33 +131,30 @@ class Kernel
         column = code.length
 
         console.log "sending competion"
-        header = JSON.stringify({
-                msg_id: requestId,
-                username: "",
-                session: 0,
-                msg_type: "complete_request",
+        header =
+                msg_id: requestId
+                username: ""
+                session: 0
+                msg_type: "complete_request"
                 version: "5.0"
-            })
 
-        content = JSON.stringify({
+        content =
                 code: code
                 text: code
                 line: code
                 cursor_pos: column
-            })
 
-        message =  [
-                '<IDS|MSG>',
-                '',
-                header,
-                '{}',
-                '{}',
-                content
-            ]
-        console.log message
+        message = new jmp.Message()
+        message.fill(
+                header: header
+                content: content
+            )
+
+        signedMessage = message.sign(@signatureScheme, @signatureKey)
+        console.log signedMessage
 
         @executionCallbacks[requestId] = onResults
-        @shellSocket.send message
+        @shellSocket.send signedMessage
 
     addWatchCallback: (watchCallback) ->
         @watchCallbacks.push(watchCallback)
@@ -285,27 +281,25 @@ class Kernel
         requestId = uuid.v4()
 
         console.log "sending shutdown"
-        header = JSON.stringify({
-                msg_id: requestId,
-                username: "",
-                session: 0,
-                msg_type: "shutdown_request",
+        header =
+                msg_id: requestId
+                username: ""
+                session: 0
+                msg_type: "shutdown_request"
                 version: "5.0"
-            })
 
-        content = JSON.stringify({
+        content =
                 restart: false
-            })
 
-        message =  [
-                '<IDS|MSG>',
-                '',
-                header,
-                '{}',
-                '{}',
-                content
-            ]
-        @shellSocket.send message
+        message = new jmp.Message()
+        message.fill(
+                header: header
+                content: content
+            )
+
+        signedMessage = message.sign(@signatureScheme, @signatureKey)
+
+        @shellSocket.send signedMessage
         @shellSocket.close()
         @ioSocket.close()
 

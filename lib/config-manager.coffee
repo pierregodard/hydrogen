@@ -2,6 +2,7 @@ uuid = require 'uuid'
 fs = require 'fs'
 path = require 'path'
 child_process = require 'child_process'
+uuid = require 'uuid'
 
 portfinder = require './find-port'
 
@@ -25,7 +26,7 @@ module.exports = ConfigManager =
     buildConfiguration: (ports) ->
         config =
             version: 5
-            key: ""
+            key: uuid.v4()
             signature_scheme: "hmac-sha256"
             transport: "tcp"
             ip: "127.0.0.1"
