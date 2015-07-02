@@ -4,6 +4,7 @@ zmq = require 'zmq'
 _ = require 'lodash'
 child_process = require 'child_process'
 uuid = require 'uuid'
+jmp = require 'jmp'
 
 StatusView = require './status-view'
 WatchSidebar = require './watch-sidebar'
@@ -97,7 +98,7 @@ class Kernel
                 version: "5.0"
             })
 
-        contents = JSON.stringify({
+        content = JSON.stringify({
                 code: code
                 silent: false
                 store_history: true
@@ -111,7 +112,7 @@ class Kernel
                 header,
                 '{}',
                 '{}',
-                contents
+                content
             ]
         console.log message
 
@@ -128,7 +129,6 @@ class Kernel
 
     complete: (code, onResults) ->
         requestId = "complete_" + uuid.v4()
-
         column = code.length
 
         console.log "sending competion"
@@ -140,7 +140,7 @@ class Kernel
                 version: "5.0"
             })
 
-        contents = JSON.stringify({
+        content = JSON.stringify({
                 code: code
                 text: code
                 line: code
@@ -153,7 +153,7 @@ class Kernel
                 header,
                 '{}',
                 '{}',
-                contents
+                content
             ]
         console.log message
 
@@ -164,16 +164,16 @@ class Kernel
         @watchCallbacks.push(watchCallback)
 
     onShellMessage: (msgArray...) ->
-        message = @parseMessage msgArray
+        message = new jmp.Message(msgArray, "sha256", "")
         console.log "shell message:", message
 
-        if _.has(message, ['parent_header', 'msg_id'])
-            callback = @executionCallbacks[message.parent_header.msg_id]
-        if callback? and _.has(message, ['contents', 'status'])
+        if _.has(message, ['parentHeader', 'msg_id'])
+            callback = @executionCallbacks[message.parentHeader.msg_id]
+        if callback? and _.has(message, ['content', 'status'])
 
-            if message.contents.status == 'ok'
+            if message.content.status == 'ok'
                 if message.type == 'complete_reply'
-                    matches = message.contents.matches
+                    matches = message.content.matches
                     # matches = _.map matches, (match) -> {text: match}
                     callback(matches)
                 else
@@ -183,10 +183,10 @@ class Kernel
                         stream: 'status'
                     }
 
-            else if message.contents.status == 'error'
-                errorString = message.contents.ename
-                if message.contents.evalue.length > 0
-                    errorString = errorString + "\n" + message.contents.evalue
+            else if message.content.status == 'error'
+                errorString = message.content.ename
+                if message.content.evalue.length > 0
+                    errorString = errorString + "\n" + message.content.evalue
                 callback {
                     data: errorString
                     type: 'text'
@@ -195,73 +195,69 @@ class Kernel
 
 
     onIOMessage: (msgArray...) ->
-        console.log "IO message"
-        _.forEach msgArray, (msg) -> console.log "io:", msg.toString('utf8')
+        message = new jmp.Message(msgArray, "sha256", "")
+        console.log "IO message", message
 
-        message = @parseMessage msgArray
-        console.log message
-
-        if message.type == 'status'
-            status = message.contents.execution_state
+        if message.header.msg_type == 'status'
+            status = message.content.execution_state
             @statusView.setStatus(status)
 
-            if status == 'idle' and _.has(message, ['parent_header', 'msg_id'])
-                if message.parent_header.msg_id.startsWith('execute')
+            if status == 'idle' and _.has(message, ['parentHeader', 'msg_id'])
+                if message.parentHeader.msg_id.startsWith('execute')
                     _.forEach @watchCallbacks, (watchCallback) ->
                         watchCallback()
 
-        if _.has(message, ['parent_header', 'msg_id'])
-            callback = @executionCallbacks[message.parent_header.msg_id]
-        if callback? and message.parent_header.msg_id?
+        if _.has(message, ['parentHeader', 'msg_id'])
+            callback = @executionCallbacks[message.parentHeader.msg_id]
+        if callback? and message.parentHeader.msg_id?
             resultObject = @getResultObject message
             if resultObject?
                 callback(resultObject)
 
     getResultObject: (message) ->
-        if message.type == 'pyout' or
-           message.type == 'display_data' or
-           message.type == 'execute_result'
-            if message.contents.data['text/html']?
+        if message.header.msg_type == 'pyout' or
+           message.header.msg_type == 'display_data' or
+           message.header.msg_type == 'execute_result'
+            if message.content.data['text/html']?
                 return {
-                    # data: message.contents.data['image/svg+xml']
-                    data: message.contents.data['text/html']
+                    data: message.content.data['text/html']
                     type: 'text/html'
                     stream: 'pyout'
                 }
-            if message.contents.data['image/svg+xml']?
+            if message.content.data['image/svg+xml']?
                 return {
-                    data: message.contents.data['image/svg+xml']
+                    data: message.content.data['image/svg+xml']
                     type: 'image/svg+xml'
                     stream: 'pyout'
                 }
 
-            imageKeys = _.filter _.keys(message.contents.data), (key) ->
+            imageKeys = _.filter _.keys(message.content.data), (key) ->
                 return key.startsWith('image')
             imageKey = imageKeys[0]
 
             if imageKey?
                 return {
-                    data: message.contents.data[imageKey]
+                    data: message.content.data[imageKey]
                     type: imageKey
                     stream: 'pyout'
                 }
             else
                 return {
-                    data: message.contents.data['text/plain']
+                    data: message.content.data['text/plain']
                     type: 'text'
                     stream: 'pyout'
                 }
-        else if message.type == 'stdout' or
-                message.prefix == 'stdout' or
-                message.prefix == 'stream.stdout' or
-                message.contents.name == 'stdout'
+        else if message.header.msg_type == 'stdout' or
+                message.idents[0].toString() == 'stdout' or
+                message.idents[0].toString() == 'stream.stdout' or
+                message.content.name == 'stdout'
             return {
-                data: message.contents.text ? message.contents.data
+                data: message.content.text ? message.content.data
                 type: 'text'
                 stream: 'stdout'
             }
         else if message.type == 'pyerr' or message.type == 'error'
-            stack = message.contents.traceback
+            stack = message.content.traceback
             stack = _.map stack, (item) -> item.trim()
             stack = stack.join('\n')
             return {
@@ -270,20 +266,20 @@ class Kernel
                 stream: 'error'
             }
 
-    parseMessage: (msg) ->
-        i = 0
-        while msg[i].toString('utf8') != '<IDS|MSG>'
-            i++
-
-        msgObject = {
-                prefix: msg[0].toString('utf8')
-                header: JSON.parse msg[i+2].toString('utf8')
-                parent_header: JSON.parse msg[i+3].toString('utf8')
-                metadata: JSON.parse msg[i+4].toString('utf8')
-                contents: JSON.parse msg[i+5].toString('utf8')
-            }
-        msgObject.type = msgObject.header.msg_type
-        return msgObject
+    # parseMessage: (msg) ->
+    #     i = 0
+    #     while msg[i].toString('utf8') != '<IDS|MSG>'
+    #         i++
+    #
+    #     msgObject = {
+    #             prefix: msg[0].toString('utf8')
+    #             header: JSON.parse msg[i+2].toString('utf8')
+    #             parentHeader: JSON.parse msg[i+3].toString('utf8')
+    #             metadata: JSON.parse msg[i+4].toString('utf8')
+    #             content: JSON.parse msg[i+5].toString('utf8')
+    #         }
+    #     msgObject.type = msgObject.header.msg_type
+    #     return msgObject
 
     destroy: ->
         requestId = uuid.v4()
@@ -297,7 +293,7 @@ class Kernel
                 version: "5.0"
             })
 
-        contents = JSON.stringify({
+        content = JSON.stringify({
                 restart: false
             })
 
@@ -307,7 +303,7 @@ class Kernel
                 header,
                 '{}',
                 '{}',
-                contents
+                content
             ]
         @shellSocket.send message
         @shellSocket.close()
