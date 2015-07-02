@@ -7,6 +7,7 @@ uuid = require 'uuid'
 portfinder = require './find-port'
 
 module.exports = ConfigManager =
+    SIGNATURE_SCHEME: "sha256"
     fileStoragePath: path.join(__dirname, '..', 'kernel-configs')
 
     writeConfigFile: (onCompleted) ->
@@ -27,7 +28,7 @@ module.exports = ConfigManager =
         config =
             version: 5
             key: uuid.v4()
-            signature_scheme: "hmac-sha256"
+            signature_scheme: "hmac-#{@SIGNATURE_SCHEME}"
             transport: "tcp"
             ip: "127.0.0.1"
             hb_port: ports[0]

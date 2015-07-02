@@ -6,6 +6,7 @@ child_process = require 'child_process'
 uuid = require 'uuid'
 jmp = require 'jmp'
 
+ConfigManager = require './config-manager'
 StatusView = require './status-view'
 WatchSidebar = require './watch-sidebar'
 
@@ -15,7 +16,6 @@ class Kernel
         console.log "Kernel info:", @kernelInfo
         console.log "Kernel configuration:", @config
         console.log "Kernel configuration file path:", @configPath
-        @signatureScheme = "sha256"
         @signatureKey = @config.key
         @language = @kernelInfo.language.toLowerCase()
         @executionCallbacks = {}
@@ -160,7 +160,7 @@ class Kernel
         @watchCallbacks.push(watchCallback)
 
     onShellMessage: (msgArray...) ->
-        message = new jmp.Message(msgArray, "sha256", "")
+        message = new jmp.Message(msgArray, ConfigManager.SIGNATURE_SCHEME, "")
         console.log "shell message:", message
 
         if _.has(message, ['parentHeader', 'msg_id'])
@@ -191,7 +191,7 @@ class Kernel
 
 
     onIOMessage: (msgArray...) ->
-        message = new jmp.Message(msgArray, "sha256", "")
+        message = new jmp.Message(msgArray, ConfigManager.SIGNATURE_SCHEME, "")
         console.log "IO message", message
 
         if message.header.msg_type == 'status'
@@ -261,21 +261,6 @@ class Kernel
                 type: 'text'
                 stream: 'error'
             }
-
-    # parseMessage: (msg) ->
-    #     i = 0
-    #     while msg[i].toString('utf8') != '<IDS|MSG>'
-    #         i++
-    #
-    #     msgObject = {
-    #             prefix: msg[0].toString('utf8')
-    #             header: JSON.parse msg[i+2].toString('utf8')
-    #             parentHeader: JSON.parse msg[i+3].toString('utf8')
-    #             metadata: JSON.parse msg[i+4].toString('utf8')
-    #             content: JSON.parse msg[i+5].toString('utf8')
-    #         }
-    #     msgObject.type = msgObject.header.msg_type
-    #     return msgObject
 
     destroy: ->
         requestId = uuid.v4()
