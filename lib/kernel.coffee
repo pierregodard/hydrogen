@@ -17,6 +17,7 @@ class Kernel
         console.log "Kernel configuration:", @config
         console.log "Kernel configuration file path:", @configPath
         @signatureKey = @config.key
+        @signatureScheme = ConfigManager.SIGNATURE_SCHEME
         @language = @kernelInfo.language.toLowerCase()
         @executionCallbacks = {}
         @watchCallbacks = []
@@ -68,9 +69,9 @@ class Kernel
             #         console.log 'exec error: ', error
 
     connect: ->
-        @shellSocket = zmq.socket 'dealer'
-        @controlSocket = zmq.socket 'dealer'
-        @ioSocket    = zmq.socket 'sub'
+        @shellSocket    = new jmp.Socket 'dealer', @signatureScheme, @signatureKey
+        @controlSocket  = new jmp.Socket 'dealer', @signatureScheme, @signatureKey
+        @ioSocket       = new jmp.Socket 'sub', @signatureScheme, @signatureKey
 
         @shellSocket.identity = 'dealer' + @language + process.pid
         @controlSocket.identity = 'control' + @language + process.pid
@@ -107,16 +108,14 @@ class Kernel
                 allow_stdin: false
 
         message = new jmp.Message()
-        message.fill(
-                header: header
-                content: content
-            )
+        message.header = header
+        message.content = content
 
-        signedMessage = message.sign(@signatureScheme, @signatureKey)
-        console.log signedMessage
+        # signedMessage = message.sign(@signatureScheme, @signatureKey)
+        # console.log signedMessage
 
         @executionCallbacks[requestId] = onResults
-        @shellSocket.send signedMessage
+        @shellSocket.send message
 
     execute: (code, onResults) ->
         requestId = "execute_" + uuid.v4()
@@ -145,22 +144,20 @@ class Kernel
                 cursor_pos: column
 
         message = new jmp.Message()
-        message.fill(
-                header: header
-                content: content
-            )
+        message.header = header
+        message.content = content
 
-        signedMessage = message.sign(@signatureScheme, @signatureKey)
-        console.log signedMessage
+        # signedMessage = message.sign(@signatureScheme, @signatureKey)
+        # console.log signedMessage
 
         @executionCallbacks[requestId] = onResults
-        @shellSocket.send signedMessage
+        @shellSocket.send message
 
     addWatchCallback: (watchCallback) ->
         @watchCallbacks.push(watchCallback)
 
-    onShellMessage: (msgArray...) ->
-        message = new jmp.Message(msgArray, ConfigManager.SIGNATURE_SCHEME, "")
+    onShellMessage: (message) ->
+        # message = new jmp.Message(msgArray, ConfigManager.SIGNATURE_SCHEME, "")
         console.log "shell message:", message
 
         if _.has(message, ['parentHeader', 'msg_id'])
@@ -189,9 +186,8 @@ class Kernel
                     stream: 'error'
                 }
 
-
-    onIOMessage: (msgArray...) ->
-        message = new jmp.Message(msgArray, ConfigManager.SIGNATURE_SCHEME, "")
+    onIOMessage: (message) ->
+        # message = new jmp.Message(msgArray, ConfigManager.SIGNATURE_SCHEME, "")
         console.log "IO message", message
 
         if message.header.msg_type == 'status'
@@ -277,16 +273,16 @@ class Kernel
                 restart: false
 
         message = new jmp.Message()
-        message.fill(
-                header: header
-                content: content
-            )
+        message.header = header
+        message.content = content
 
-        signedMessage = message.sign(@signatureScheme, @signatureKey)
+        # signedMessage = message.sign(@signatureScheme, @signatureKey)
+        # console.log signedMessage
 
-        @shellSocket.send signedMessage
+        @controlSocket.send message
         @shellSocket.close()
         @ioSocket.close()
+        @controlSocket.close()
 
         @kernelProcess.kill('SIGKILL')
 

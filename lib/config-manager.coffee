@@ -2,7 +2,7 @@ uuid = require 'uuid'
 fs = require 'fs'
 path = require 'path'
 child_process = require 'child_process'
-uuid = require 'uuid'
+crypto = require 'crypto'
 
 portfinder = require './find-port'
 
@@ -27,7 +27,7 @@ module.exports = ConfigManager =
     buildConfiguration: (ports) ->
         config =
             version: 5
-            key: uuid.v4()
+            key: crypto.randomBytes(256).toString('base64')
             signature_scheme: "hmac-#{@SIGNATURE_SCHEME}"
             transport: "tcp"
             ip: "127.0.0.1"
