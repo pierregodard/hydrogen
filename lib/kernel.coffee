@@ -160,8 +160,8 @@ class Kernel
         # message = new jmp.Message(msgArray, ConfigManager.SIGNATURE_SCHEME, "")
         console.log "shell message:", message
 
-        if _.has(message, ['parentHeader', 'msg_id'])
-            callback = @executionCallbacks[message.parentHeader.msg_id]
+        if _.has(message, ['parent_header', 'msg_id'])
+            callback = @executionCallbacks[message.parent_header.msg_id]
         if callback? and _.has(message, ['content', 'status'])
 
             if message.content.status == 'ok'
@@ -194,14 +194,14 @@ class Kernel
             status = message.content.execution_state
             @statusView.setStatus(status)
 
-            if status == 'idle' and _.has(message, ['parentHeader', 'msg_id'])
-                if message.parentHeader.msg_id.startsWith('execute')
+            if status == 'idle' and _.has(message, ['parent_header', 'msg_id'])
+                if message.parent_header.msg_id.startsWith('execute')
                     _.forEach @watchCallbacks, (watchCallback) ->
                         watchCallback()
 
-        if _.has(message, ['parentHeader', 'msg_id'])
-            callback = @executionCallbacks[message.parentHeader.msg_id]
-        if callback? and message.parentHeader.msg_id?
+        if _.has(message, ['parent_header', 'msg_id'])
+            callback = @executionCallbacks[message.parent_header.msg_id]
+        if callback? and message.parent_header.msg_id?
             resultObject = @getResultObject message
             if resultObject?
                 callback(resultObject)
